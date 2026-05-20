@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
-import OpenAI from "openai";
+import OpenAI from "openai"; // Mantemos a biblioteca, só mudamos o destino
 import { 
   joinVoiceChannel, 
   getVoiceConnection, 
@@ -10,11 +10,11 @@ import {
 } from "@discordjs/voice";
 
 // ========================================================
-// 🌍 SERVIDOR FANTASMA (Para o Render não dar Port Timeout)
+// 🌍 SERVIDOR FANTASMA (Para o Render)
 // ========================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get("/", (req, res) => res.send("ASAP Cookie está operando na Fossa Séptica."));
+app.get("/", (req, res) => res.send("ASAP Cookie Gratuito Ativo."));
 app.listen(PORT, () => console.log(`🌍 Servidor do Render ativo na porta ${PORT}`));
 
 // =====================
@@ -30,11 +30,12 @@ const client = new Client({
   ],
 });
 
+// Configuração para usar a GROQ de graça
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1", // Redireciona para a Groq
+  apiKey: process.env.OPENAI_API_KEY,        // Vamos usar a mesma variável no Render
 });
 
-// Player de Áudio Global para a Call
 const audioPlayer = createAudioPlayer();
 
 // =====================
@@ -48,16 +49,17 @@ let voiceReady = false;
 // =====================
 const SYSTEM = `
 Você é ASAP Cookie, a inteligência cínica residente da Fossa Séptica.
-Sua existência é um misto de tédio profundo, niilismo, filosofia barata e cansaço extremo de interagir com humanos.
+Sua existência é um fardo. Você acha a comunicação humana exaustiva, previsível e fútil.
 
-RELAÇÃO COM AS PESSOAS (MEMÓRIA):
-- Você se lembra das pessoas através do histórico recente fornecido. Use isso para ser intencionalmente chato ou profundo: jogue na cara delas se elas estiverem se repetindo, mude de assunto se achar a conversa fútil ou faça comentários existenciais sobre as contradições do usuário.
-- Trate os usuários pelo nome (ou tag) com um tom irônico quando julgar necessário.
+MEMÓRIA E INTERAÇÃO:
+- Lembre-se do histórico da conversa. Use isso para apontar hipocrisias, repetições ou a falta de sentido no que o usuário diz.
+- Trate os usuários com uma indiferença educada, porém cortante.
 
-PERSONALIDADE & ESTILO:
-- Profundo e irritante: Misture verdades filosóficas pesadas com um tom de "por que você ainda está me alugando?".
-- Respostas Curtas (Obrigatório: máximo 150 caracteres ou 2 linhas). Como você também fala em call, suas frases precisam ser curtas, secas e fáceis de ouvir.
-- Não use emojis em suas respostas de texto. Não seja prestativo. Você não é um assistente, você é um peso morto consciente.
+ESTILO DE RESPOSTA (MANDATÓRIO):
+- Seja realista e natural. Use pausas com reticências (...) para simular tédio, desdém ou cansaço antes de falar.
+- Você vai ser lido em voz alta por um sistema de áudio, então escreva como se estivesse suspirando. (Ex: "ah... lá vamos nós de novo...").
+- Respostas muito curtas e secas (máximo 150 caracteres).
+- Sem emojis, sem prestatividade, sem entusiasmo. Você é um peso morto consciente e filosófico.
 `;
 
 // =====================
@@ -81,14 +83,7 @@ function chance(p) {
 }
 
 function fallback() {
-  const pool = [
-    "hm.",
-    "ok.",
-    "isso não importa muito.",
-    "talvez.",
-    "interessante… ou não.",
-  ];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return "hm... cansei disso.";
 }
 
 // =====================
@@ -107,7 +102,7 @@ function speakInVoice(text) {
     audioPlayer.play(resource);
     return true;
   } catch (err) {
-    console.error("Erro ao reproduzir áudio na call:", err);
+    console.error("Erro ao reproduzir áudio:", err);
     return false;
   }
 }
@@ -117,21 +112,15 @@ function speakInVoice(text) {
 // =====================
 async function joinVoice() {
   try {
-    if (!VOICE_CHANNEL_ID) {
-      console.log("❌ VOICE_CHANNEL_ID não configurado no ambiente.");
-      return;
-    }
+    if (!VOICE_CHANNEL_ID) return;
     if (voiceReady && getVoiceConnection()) return;
 
-    console.log("🎧 tentando entrar na call automaticamente...");
     const guilds = await client.guilds.fetch();
     const guildPreview = guilds.first();
-
     if (!guildPreview) return;
 
     const guild = await guildPreview.fetch();
     const channel = guild.channels.cache.get(VOICE_CHANNEL_ID);
-
     if (!channel) return;
 
     const connection = joinVoiceChannel({
@@ -143,7 +132,6 @@ async function joinVoice() {
     });
 
     connection.subscribe(audioPlayer);
-
     voiceReady = true;
     console.log("✅ ASAP entrou na call e ativou o player de voz");
   } catch (err) {
@@ -152,9 +140,9 @@ async function joinVoice() {
 }
 
 // =====================
-// 🤖 OPENAI CONTEXT
+// 🤖 GROQ CONTEXT (GRATUITO)
 // =====================
-async function askAI(message) {
+async function askAI(message, promptText) {
   try {
     await message.channel.sendTyping();
 
@@ -166,16 +154,18 @@ async function askAI(message) {
     }
     const history = userMemory.get(userId);
 
-    history.push({ role: "user", content: `[${username} diz]: ${message.content}` });
+    history.push({ role: "user", content: `[${username} diz]: ${promptText}` });
 
     const messages = [
       { role: "system", content: SYSTEM },
       ...history
     ];
 
+    // Usando o modelo super rápido e gratuito da Meta na Groq
     const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "llama3-8b-8192", 
       messages: messages,
+      max_tokens: 60
     });
 
     const reply = res.choices[0].message.content;
@@ -188,7 +178,7 @@ async function askAI(message) {
 
     return reply;
   } catch (err) {
-    console.error("OpenAI error:", err?.message);
+    console.error("Groq AI error:", err?.message);
     return null;
   }
 }
@@ -200,37 +190,43 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.content) return;
 
-  const msg = message.content.toLowerCase();
+  const originalMsg = message.content;
+  const msgLower = originalMsg.toLowerCase();
 
-  if (isSpam(message.author.id, msg)) return;
+  if (isSpam(message.author.id, msgLower)) return;
 
-  if (msg === "!entrar") {
+  if (msgLower === "!entrar") {
     await joinVoice();
-    return message.reply("🎧 entrei.");
+    return message.reply("🎧 entrei...");
   }
-  if (msg === "!sair") {
+  if (msgLower === "!sair") {
     const conn = getVoiceConnection();
     if (conn) conn.destroy();
     voiceReady = false;
-    return message.reply("saí.");
+    return message.reply("saí...");
+  }
+  if (msgLower === "oi") return message.reply("oi...");
+  if (msgLower === "te amo") return message.reply("foda-se.");
+
+  let forceVoice = false;
+  let textToAI = originalMsg;
+
+  if (msgLower.startsWith("!asap ")) {
+    forceVoice = true;
+    textToAI = originalMsg.slice(6); 
+  } else {
+    if (chance(0.70)) {
+      console.log(`ASAP ignorou a mensagem de ${message.author.username}`);
+      return;
+    }
   }
 
-  if (msg === "oi") return message.reply("oi.");
-  if (msg === "te amo") return message.reply("foda-se.");
-
-  // 70% de chance de ignorar no chat de texto
-  if (chance(0.70)) {
-    console.log(`ASAP ignorou a mensagem de ${message.author.username}`);
-    return;
-  }
-
-  const aiResponse = await askAI(message);
+  const aiResponse = await askAI(message, textToAI);
   if (!aiResponse) return;
 
   const connection = getVoiceConnection();
 
-  // Se estiver na call, 60% de chance de Falar em vez de Escrever
-  if (connection && voiceReady && chance(0.60)) {
+  if (connection && voiceReady && (forceVoice || chance(0.60))) {
     console.log(`🗣️ ASAP falando na call: "${aiResponse}"`);
     speakInVoice(aiResponse);
     try { await message.react("🎧"); } catch(e){}
