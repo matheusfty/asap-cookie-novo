@@ -33,7 +33,7 @@ const client = new Client({
 // Configuração para usar a GROQ de graça
 const openai = new OpenAI({
   baseURL: "https://api.groq.com/openai/v1", // Redireciona para a Groq
-  apiKey: process.env.OPENAI_API_KEY,        // Vamos usar a mesma variável no Render
+  apiKey: process.env.OPENAI_API_KEY,        // Usa a chave gsk_ configurada no Render
 });
 
 const audioPlayer = createAudioPlayer();
@@ -161,9 +161,9 @@ async function askAI(message, promptText) {
       ...history
     ];
 
-    // Usando o modelo super rápido e gratuito da Meta na Groq
+    // Modelo atualizado e ativo na Groq
     const res = await openai.chat.completions.create({
-      model: "llama3-8b-8192", 
+      model: "llama-3.1-8b-instant", 
       messages: messages,
       max_tokens: 60
     });
