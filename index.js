@@ -1,12 +1,13 @@
 import "dotenv/config";
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
-import OpenAI from "openai"; // Mantemos a biblioteca, só mudamos o destino
+import OpenAI from "openai";
 import { 
   joinVoiceChannel, 
   getVoiceConnection, 
   createAudioPlayer, 
-  createAudioResource 
+  createAudioResource,
+  AudioPlayerStatus
 } from "@discordjs/voice";
 
 // ========================================================
@@ -30,19 +31,21 @@ const client = new Client({
   ],
 });
 
-// Configuração para usar a GROQ de graça
 const openai = new OpenAI({
-  baseURL: "https://api.groq.com/openai/v1", // Redireciona para a Groq
-  apiKey: process.env.OPENAI_API_KEY,        // Usa a chave gsk_ configurada no Render
+  baseURL: "https://api.groq.com/openai/v1", 
+  apiKey: process.env.OPENAI_API_KEY,        
 });
 
 const audioPlayer = createAudioPlayer();
+
+// Logs para monitorar o player de áudio
+audioPlayer.on(AudioPlayerStatus.Playing, () => console.log("🎵 Reproduzindo áudio na call..."));
+audioPlayer.on("error", (error) => console.error("❌ Erro no Player de Áudio:", error.message));
 
 // =====================
 // 🎧 VOICE CONFIG
 // =====================
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
-let voiceReady = false;
 
 // =====================
 // 🧠 PERSONALIDADE
@@ -91,7 +94,10 @@ function fallback() {
 // =====================
 function speakInVoice(text) {
   const connection = getVoiceConnection();
-  if (!connection) return false;
+  if (!connection) {
+    console.log("❌ Tentativa de falar falhou: Bot não está conectado em nenhuma call.");
+    return false;
+  }
 
   const cleanText = text.slice(0, 200);
   const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
@@ -102,18 +108,23 @@ function speakInVoice(text) {
     audioPlayer.play(resource);
     return true;
   } catch (err) {
-    console.error("Erro ao reproduzir áudio:", err);
+    console.error("❌ Erro ao reproduzir áudio:", err);
     return false;
   }
 }
 
 // =====================
-// 🎧 VOICE JOIN
+// 🎧 VOICE JOIN (REFEITO À PROVA DE FALHAS)
 // =====================
 async function joinVoice() {
   try {
     if (!VOICE_CHANNEL_ID) return;
-    if (voiceReady && getVoiceConnection()) return;
+
+    // Limpa qualquer conexão anterior que possa estar travada ("fantasma")
+    const existingConnection = getVoiceConnection();
+    if (existingConnection) {
+      existingConnection.destroy();
+    }
 
     const guilds = await client.guilds.fetch();
     const guildPreview = guilds.first();
@@ -131,16 +142,16 @@ async function joinVoice() {
       selfMute: false, 
     });
 
+    // Força o player a se conectar na nova conexão criada
     connection.subscribe(audioPlayer);
-    voiceReady = true;
-    console.log("✅ ASAP entrou na call e ativou o player de voz");
+    console.log("✅ ASAP se conectou do zero e vinculou o player de áudio.");
   } catch (err) {
-    console.error("VOICE ERROR:", err);
+    console.error("❌ ERRO AO ENTRAR NA CALL:", err);
   }
 }
 
 // =====================
-// 🤖 GROQ CONTEXT (GRATUITO)
+// 🤖 GROQ CONTEXT
 // =====================
 async function askAI(message, promptText) {
   try {
@@ -161,7 +172,6 @@ async function askAI(message, promptText) {
       ...history
     ];
 
-    // Modelo atualizado e ativo na Groq
     const res = await openai.chat.completions.create({
       model: "llama-3.1-8b-instant", 
       messages: messages,
@@ -195,14 +205,17 @@ client.on("messageCreate", async (message) => {
 
   if (isSpam(message.author.id, msgLower)) return;
 
+  // Comandos manuais corrigidos para forçar a limpeza de conexões
   if (msgLower === "!entrar") {
     await joinVoice();
     return message.reply("🎧 entrei...");
   }
   if (msgLower === "!sair") {
     const conn = getVoiceConnection();
-    if (conn) conn.destroy();
-    voiceReady = false;
+    if (conn) {
+      conn.destroy();
+      console.log("🛑 Conexão encerrada via comando !sair");
+    }
     return message.reply("saí...");
   }
   if (msgLower === "oi") return message.reply("oi...");
@@ -226,13 +239,14 @@ client.on("messageCreate", async (message) => {
 
   const connection = getVoiceConnection();
 
-  if (connection && voiceReady && (forceVoice || chance(0.60))) {
-    console.log(`🗣️ ASAP falando na call: "${aiResponse}"`);
+  // Se houver uma conexão ativa de verdade, prioriza falar
+  if (connection && (forceVoice || chance(0.60))) {
     speakInVoice(aiResponse);
     try { await message.react("🎧"); } catch(e){}
     return;
   }
 
+  // Se não houver call ativa ou cair nos 40%, responde por texto
   return message.reply(aiResponse ?? fallback());
 });
 
@@ -250,7 +264,6 @@ client.once("ready", () => {
 setInterval(() => {
   const conn = getVoiceConnection();
   if (!conn && VOICE_CHANNEL_ID) {
-    voiceReady = false;
     joinVoice();
   }
 }, 60000);
