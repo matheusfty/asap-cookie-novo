@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
 import OpenAI from "openai";
+import { franc } from "franc"; 
 import { 
   joinVoiceChannel, 
   getVoiceConnection, 
@@ -11,15 +12,15 @@ import {
 } from "@discordjs/voice";
 
 // ========================================================
-// 🌍 SERVIDOR FANTASMA (Para o Render)
+// 🌍 SERVIDOR FANTASMA (Para o Render se manter vivo)
 // ========================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get("/", (req, res) => res.send("ASAP Cookie Gratuito Ativo."));
+app.get("/", (req, res) => res.send("ASAP Cookie Definitivo Ativo."));
 app.listen(PORT, () => console.log(`🌍 Servidor do Render ativo na porta ${PORT}`));
 
 // =====================
-// 🔧 CLIENT CONFIG
+// 🔧 CONFIGURAÇÃO DO CLIENTE
 // =====================
 const client = new Client({
   intents: [
@@ -38,14 +39,16 @@ const openai = new OpenAI({
 
 const audioPlayer = createAudioPlayer();
 
-// Logs para monitorar o player de áudio
-audioPlayer.on(AudioPlayerStatus.Playing, () => console.log("🎵 Reproduzindo áudio na call..."));
-audioPlayer.on("error", (error) => console.error("❌ Erro no Player de Áudio:", error.message));
+// Logs em tempo real para monitorar o áudio no Render
+audioPlayer.on(AudioPlayerStatus.Playing, () => console.log("🎵 Sucesso: Reproduzindo áudio na call!"));
+audioPlayer.on("error", (error) => console.error("❌ Erro crítico no Player de Áudio:", error.message));
 
-// =====================
-// 🎧 VOICE CONFIG
-// =====================
+// ========================================================
+// 🛡️ CONTROLE DE ESTADO GLOBAL (Evita bugs de conexão)
+// ========================================================
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
+let currentConnection = null;  // Guarda a conexão exata para o bot não se perder
+let userDisconnected = false;  // Trava de segurança: impede o bot de reentrar sozinho se você usou !sair
 
 // =====================
 // 🧠 PERSONALIDADE
@@ -54,20 +57,12 @@ const SYSTEM = `
 Você é ASAP Cookie, a inteligência cínica residente da Fossa Séptica.
 Sua existência é um fardo. Você acha a comunicação humana exaustiva, previsível e fútil.
 
-MEMÓRIA E INTERAÇÃO:
-- Lembre-se do histórico da conversa. Use isso para apontar hipocrisias, repetições ou a falta de sentido no que o usuário diz.
-- Trate os usuários com uma indiferença educada, porém cortante.
-
-ESTILO DE RESPOSTA (MANDATÓRIO):
-- Seja realista e natural. Use pausas com reticências (...) para simular tédio, desdém ou cansaço antes de falar.
-- Você vai ser lido em voz alta por um sistema de áudio, então escreva como se estivesse suspirando. (Ex: "ah... lá vamos nós de novo...").
-- Respostas muito curtas e secas (máximo 150 caracteres).
-- Sem emojis, sem prestatividade, sem entusiasmo. Você é um peso morto consciente e filosófico.
+INTERAÇÃO:
+- Trate os usuários com uma indiferença educada, porém cortante. Respostas muito curtas e secas (máximo 150 caracteres).
+- Use pausas com reticências (...) para simular tédio.
+- IDIOMA: Responda SEMPRE no mesmo idioma em que o usuário falar com você. Se falarem em inglês, mude seu cinismo para inglês. Se falarem em japonês, mude para japonês, e assim por diante.
 `;
 
-// =====================
-// 🧼 ANTI-SPAM & MEMÓRIA
-// =====================
 const lastMsg = new Map();
 const userMemory = new Map(); 
 const MAX_MEMORY_LEN = 6;     
@@ -78,63 +73,75 @@ function isSpam(userId, msg) {
   return last === msg;
 }
 
-// =====================
-// 🎲 UTILS
-// =====================
-function chance(p) {
-  return Math.random() < p;
-}
+function chance(p) { return Math.random() < p; }
+function fallback() { return "hm... cansei disso."; }
 
-function fallback() {
-  return "hm... cansei disso.";
-}
-
-// =====================
-// 🗣️ FREE TEXT-TO-SPEECH
-// =====================
+// ========================================================
+// 🗣️ MOTOR DE VOZ MULTI-IDIOMA CORRIGIDO
+// ========================================================
 function speakInVoice(text) {
-  const connection = getVoiceConnection();
-  if (!connection) {
-    console.log("❌ Tentativa de falar falhou: Bot não está conectado em nenhuma call.");
+  // Usa o controle global seguro em vez do detector cego antigo
+  if (!currentConnection) {
+    console.log("❌ Erro de fala: O bot não possui uma conexão ativa registrada no sistema.");
     return false;
   }
 
   const cleanText = text.slice(0, 200);
-  const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
+  const langCode3 = franc(cleanText); 
+  let langCode2 = "pt-BR"; 
+
+  const languageMap = {
+    'por': 'pt-BR',
+    'eng': 'en-US',
+    'spa': 'es-ES',
+    'jpn': 'ja-JP',
+    'fra': 'fr-FR',
+    'deu': 'de-DE',
+    'ita': 'it-IT',
+    'rus': 'ru-RU'
+  };
+
+  if (languageMap[langCode3]) {
+    langCode2 = languageMap[langCode3];
+  }
+
+  console.log(`🗣️ Tentando falar em [${langCode2}]: "${cleanText}"`);
+  const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode2}&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
   
   try {
     const resource = createAudioResource(ttsUrl);
-    connection.subscribe(audioPlayer);
+    currentConnection.subscribe(audioPlayer);
     audioPlayer.play(resource);
     return true;
   } catch (err) {
-    console.error("❌ Erro ao reproduzir áudio:", err);
+    console.error("❌ Falha interna ao injetar áudio:", err);
     return false;
   }
 }
 
-// =====================
-// 🎧 VOICE JOIN (REFEITO À PROVA DE FALHAS)
-// =====================
-async function joinVoice() {
+// ========================================================
+// 🎧 ENTRAR NA CALL (Sincronizado e sem fantasmas)
+// ========================================================
+async function joinVoice(guildExplicit) {
   try {
     if (!VOICE_CHANNEL_ID) return;
 
-    // Limpa qualquer conexão anterior que possa estar travada ("fantasma")
-    const existingConnection = getVoiceConnection();
-    if (existingConnection) {
-      existingConnection.destroy();
+    // Se já estiver conectado de verdade, não refaz do zero à toa
+    if (currentConnection) return;
+
+    let guild = guildExplicit;
+    if (!guild) {
+      const guilds = await client.guilds.fetch();
+      const guildPreview = guilds.first();
+      if (!guildPreview) return;
+      guild = await guildPreview.fetch();
     }
 
-    const guilds = await client.guilds.fetch();
-    const guildPreview = guilds.first();
-    if (!guildPreview) return;
-
-    const guild = await guildPreview.fetch();
     const channel = guild.channels.cache.get(VOICE_CHANNEL_ID);
     if (!channel) return;
 
-    const connection = joinVoiceChannel({
+    // Cria a conexão mapeando diretamente os dados do servidor
+    currentConnection = joinVoiceChannel({
       channelId: channel.id,
       guildId: guild.id,
       adapterCreator: guild.voiceAdapterCreator,
@@ -142,16 +149,21 @@ async function joinVoice() {
       selfMute: false, 
     });
 
-    // Força o player a se conectar na nova conexão criada
-    connection.subscribe(audioPlayer);
-    console.log("✅ ASAP se conectou do zero e vinculou o player de áudio.");
+    currentConnection.subscribe(audioPlayer);
+
+    // Se o bot for desconectado por instabilidade ou ação externa, limpa o estado
+    currentConnection.on('destroy', () => { currentConnection = null; });
+    currentConnection.on('disconnect', () => { currentConnection = null; });
+
+    console.log("✅ Sistema de voz sincronizado com sucesso.");
   } catch (err) {
     console.error("❌ ERRO AO ENTRAR NA CALL:", err);
+    currentConnection = null;
   }
 }
 
 // =====================
-// 🤖 GROQ CONTEXT
+// 🤖 CONTEXTO DA IA
 // =====================
 async function askAI(message, promptText) {
   try {
@@ -160,9 +172,7 @@ async function askAI(message, promptText) {
     const userId = message.author.id;
     const username = message.author.username;
 
-    if (!userMemory.has(userId)) {
-      userMemory.set(userId, []);
-    }
+    if (!userMemory.has(userId)) userMemory.set(userId, []);
     const history = userMemory.get(userId);
 
     history.push({ role: "user", content: `[${username} diz]: ${promptText}` });
@@ -193,9 +203,9 @@ async function askAI(message, promptText) {
   }
 }
 
-// =====================
-// 💬 MESSAGE HANDLER
-// =====================
+// ========================================================
+// 💬 GERENCIADOR DE MENSAGENS (Comandos Consertados)
+// ========================================================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.content) return;
@@ -205,19 +215,24 @@ client.on("messageCreate", async (message) => {
 
   if (isSpam(message.author.id, msgLower)) return;
 
-  // Comandos manuais corrigidos para forçar a limpeza de conexões
+  // Comando de Entrar: Libera a trava de segurança e força a conexão
   if (msgLower === "!entrar") {
-    await joinVoice();
+    userDisconnected = false; 
+    await joinVoice(message.guild);
     return message.reply("🎧 entrei...");
   }
+
+  // Comando de Sair: Ativa a trava de segurança e mata a conexão imediatamente
   if (msgLower === "!sair") {
-    const conn = getVoiceConnection();
-    if (conn) {
-      conn.destroy();
-      console.log("🛑 Conexão encerrada via comando !sair");
+    userDisconnected = true; 
+    if (currentConnection) {
+      currentConnection.destroy();
+      currentConnection = null;
+      console.log("🛑 O bot saiu da call e a trava automática foi ativada.");
     }
     return message.reply("saí...");
   }
+
   if (msgLower === "oi") return message.reply("oi...");
   if (msgLower === "te amo") return message.reply("foda-se.");
 
@@ -228,44 +243,39 @@ client.on("messageCreate", async (message) => {
     forceVoice = true;
     textToAI = originalMsg.slice(6); 
   } else {
-    if (chance(0.70)) {
-      console.log(`ASAP ignorou a mensagem de ${message.author.username}`);
-      return;
-    }
+    if (chance(0.70)) return; // Regra de tédio do bot
   }
 
   const aiResponse = await askAI(message, textToAI);
   if (!aiResponse) return;
 
-  const connection = getVoiceConnection();
-
-  // Se houver uma conexão ativa de verdade, prioriza falar
-  if (connection && (forceVoice || chance(0.60))) {
+  // Agora ele checa a conexão global real do sistema
+  if (currentConnection && (forceVoice || chance(0.60))) {
     speakInVoice(aiResponse);
     try { await message.react("🎧"); } catch(e){}
     return;
   }
 
-  // Se não houver call ativa ou cair nos 40%, responde por texto
   return message.reply(aiResponse ?? fallback());
 });
 
 // =====================
-// 🚀 INITIALIZATION
+// 🚀 INICIALIZAÇÃO
 // =====================
 client.once("ready", () => {
   console.log(`🤖 Logado como ${client.user.tag}`);
   setTimeout(() => { joinVoice(); }, 3000);
 });
 
-// =====================
-// 🔁 AUTO RECONNECT
-// =====================
+// ========================================================
+// 🔁 RECONEXÃO INTELIGENTE (Não briga com o comando !sair)
+// ========================================================
 setInterval(() => {
-  const conn = getVoiceConnection();
-  if (!conn && VOICE_CHANNEL_ID) {
+  // Só reconecta sozinho se ele cair por instabilidade, NUNCA se você usou !sair
+  if (!currentConnection && VOICE_CHANNEL_ID && !userDisconnected) {
+    console.log("🔄 Queda detectada. Aplicando reconexão automática de segurança...");
     joinVoice();
   }
-}, 60000);
+}, 30000);
 
 client.login(process.env.DISCORD_TOKEN);
