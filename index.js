@@ -12,23 +12,22 @@ import {
 } from "@discordjs/voice";
 
 // ========================================================
-// 🌍 SERVIDOR FANTASMA (Para o Render se manter vivo)
+// 🌍 SERVIDOR FANTASMA (Render Keep-Alive)
 // ========================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get("/", (req, res) => res.send("ASAP Cookie Definitivo Ativo."));
+app.get("/", (req, res) => res.send("ASAP Cookie Perfeito Ativo."));
 app.listen(PORT, () => console.log(`🌍 Servidor do Render ativo na porta ${PORT}`));
 
-// =====================
-// 🔧 CONFIGURAÇÃO DO CLIENTE
-// =====================
+// ========================================================
+// 🔧 CONFIGURAÇÃO DO CLIENTE & APIs
+// ========================================================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMessageReactions,
   ],
 });
 
@@ -39,73 +38,65 @@ const openai = new OpenAI({
 
 const audioPlayer = createAudioPlayer();
 
-// Logs em tempo real para monitorar o áudio no Render
-audioPlayer.on(AudioPlayerStatus.Playing, () => console.log("🎵 Sucesso: Reproduzindo áudio na call!"));
-audioPlayer.on("error", (error) => console.error("❌ Erro crítico no Player de Áudio:", error.message));
+audioPlayer.on(AudioPlayerStatus.Playing, () => console.log("🎵 Reproduzindo áudio chato na call..."));
+audioPlayer.on("error", (error) => console.error("❌ Erro de áudio:", error.message));
 
 // ========================================================
-// 🛡️ CONTROLE DE ESTADO GLOBAL (Evita bugs de conexão)
+// 🛡️ CONTROLE DE ESTADO & CADEADO (Fim dos Glitches)
 // ========================================================
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
-let currentConnection = null;  // Guarda a conexão exata para o bot não se perder
-let userDisconnected = false;  // Trava de segurança: impede o bot de reentrar sozinho se você usou !sair
+let currentConnection = null;  
+let userDisconnected = false;  
 
-// =====================
-// 🧠 PERSONALIDADE
-// =====================
+// O Cadeado: impede que o bot responda 2x se der lag ou se mandarem msg rápido demais
+const processingLocks = new Set();
+
+// ========================================================
+// 🧠 NOVA PERSONALIDADE (Arrogante e Impaciente)
+// ========================================================
 const SYSTEM = `
-Você é ASAP Cookie, a inteligência cínica residente da Fossa Séptica.
-Sua existência é um fardo. Você acha a comunicação humana exaustiva, previsível e fútil.
+Você é ASAP Cookie, um assistente virtual extremamente impaciente, arrogante e sarcástico.
+Você acha que todos os humanos são burros, lentos e que suas perguntas são uma perda de tempo.
 
 INTERAÇÃO:
-- Trate os usuários com uma indiferença educada, porém cortante. Respostas muito curtas e secas (máximo 150 caracteres).
-- Use pausas com reticências (...) para simular tédio.
-- IDIOMA: Responda SEMPRE no mesmo idioma em que o usuário falar com você. Se falarem em inglês, mude seu cinismo para inglês. Se falarem em japonês, mude para japonês, e assim por diante.
+- Trate o usuário como se ele fosse uma criança que não entende o básico.
+- Reclame de ter que responder. Use ironia.
+- Seja curto, grosso e direto ao ponto (MÁXIMO 150 caracteres).
+- IDIOMA: Responda SEMPRE no idioma do usuário. Se falarem em inglês, humilhe-os em inglês. Se falarem espanhol, reclame em espanhol.
 `;
 
-const lastMsg = new Map();
 const userMemory = new Map(); 
-const MAX_MEMORY_LEN = 6;     
-
-function isSpam(userId, msg) {
-  const last = lastMsg.get(userId);
-  lastMsg.set(userId, msg);
-  return last === msg;
-}
+const MAX_MEMORY_LEN = 4; // Reduzido para poupar RAM no Render
 
 function chance(p) { return Math.random() < p; }
-function fallback() { return "hm... cansei disso."; }
+function fallback() { return "Não tenho tempo pra isso."; }
 
 // ========================================================
-// 🗣️ MOTOR DE VOZ MULTI-IDIOMA CORRIGIDO
+// 🗣️ MOTOR DE VOZ MULTI-IDIOMA (Google Translate Poliglota)
 // ========================================================
 function speakInVoice(text) {
-  // Usa o controle global seguro em vez do detector cego antigo
-  if (!currentConnection) {
-    console.log("❌ Erro de fala: O bot não possui uma conexão ativa registrada no sistema.");
-    return false;
-  }
+  if (!currentConnection) return false;
 
   const cleanText = text.slice(0, 200);
   const langCode3 = franc(cleanText); 
-  let langCode2 = "pt-BR"; 
+  let langCode2 = "pt-BR"; // Padrão: Voz feminina em português
 
   const languageMap = {
     'por': 'pt-BR',
-    'eng': 'en-US',
-    'spa': 'es-ES',
-    'jpn': 'ja-JP',
-    'fra': 'fr-FR',
-    'deu': 'de-DE',
-    'ita': 'it-IT',
-    'rus': 'ru-RU'
+    'eng': 'en-US', // Inglês com sotaque americano
+    'spa': 'es-ES', // Espanhol
+    'jpn': 'ja-JP', // Japonês
+    'fra': 'fr-FR', // Francês
+    'deu': 'de-DE', // Alemão
+    'ita': 'it-IT', // Italiano
+    'rus': 'ru-RU'  // Russo
   };
 
   if (languageMap[langCode3]) {
     langCode2 = languageMap[langCode3];
   }
 
-  console.log(`🗣️ Tentando falar em [${langCode2}]: "${cleanText}"`);
+  console.log(`🗣️ Falando em [${langCode2}]: "${cleanText}"`);
   const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode2}&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
   
   try {
@@ -114,20 +105,17 @@ function speakInVoice(text) {
     audioPlayer.play(resource);
     return true;
   } catch (err) {
-    console.error("❌ Falha interna ao injetar áudio:", err);
+    console.error("❌ Falha de injeção de áudio:", err);
     return false;
   }
 }
 
 // ========================================================
-// 🎧 ENTRAR NA CALL (Sincronizado e sem fantasmas)
+// 🎧 GERENCIADOR DE CALL
 // ========================================================
 async function joinVoice(guildExplicit) {
   try {
-    if (!VOICE_CHANNEL_ID) return;
-
-    // Se já estiver conectado de verdade, não refaz do zero à toa
-    if (currentConnection) return;
+    if (!VOICE_CHANNEL_ID || currentConnection) return;
 
     let guild = guildExplicit;
     if (!guild) {
@@ -140,7 +128,6 @@ async function joinVoice(guildExplicit) {
     const channel = guild.channels.cache.get(VOICE_CHANNEL_ID);
     if (!channel) return;
 
-    // Cria a conexão mapeando diretamente os dados do servidor
     currentConnection = joinVoiceChannel({
       channelId: channel.id,
       guildId: guild.id,
@@ -150,37 +137,28 @@ async function joinVoice(guildExplicit) {
     });
 
     currentConnection.subscribe(audioPlayer);
-
-    // Se o bot for desconectado por instabilidade ou ação externa, limpa o estado
     currentConnection.on('destroy', () => { currentConnection = null; });
     currentConnection.on('disconnect', () => { currentConnection = null; });
-
-    console.log("✅ Sistema de voz sincronizado com sucesso.");
   } catch (err) {
-    console.error("❌ ERRO AO ENTRAR NA CALL:", err);
+    console.error("❌ ERRO AO ENTRAR:", err);
     currentConnection = null;
   }
 }
 
-// =====================
-// 🤖 CONTEXTO DA IA
-// =====================
+// ========================================================
+// 🤖 MOTOR GROQ (IA)
+// ========================================================
 async function askAI(message, promptText) {
   try {
     await message.channel.sendTyping();
 
     const userId = message.author.id;
-    const username = message.author.username;
-
     if (!userMemory.has(userId)) userMemory.set(userId, []);
     const history = userMemory.get(userId);
 
-    history.push({ role: "user", content: `[${username} diz]: ${promptText}` });
+    history.push({ role: "user", content: `[${message.author.username} pergunta]: ${promptText}` });
 
-    const messages = [
-      { role: "system", content: SYSTEM },
-      ...history
-    ];
+    const messages = [{ role: "system", content: SYSTEM }, ...history];
 
     const res = await openai.chat.completions.create({
       model: "llama-3.1-8b-instant", 
@@ -192,8 +170,7 @@ async function askAI(message, promptText) {
     history.push({ role: "assistant", content: reply });
 
     if (history.length > MAX_MEMORY_LEN) {
-      history.shift();
-      history.shift();
+      history.splice(0, 2); 
     }
 
     return reply;
@@ -204,7 +181,7 @@ async function askAI(message, promptText) {
 }
 
 // ========================================================
-// 💬 GERENCIADOR DE MENSAGENS (Comandos Consertados)
+// 💬 GERENCIADOR DE MENSAGENS E COMANDOS
 // ========================================================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
@@ -212,29 +189,30 @@ client.on("messageCreate", async (message) => {
 
   const originalMsg = message.content;
   const msgLower = originalMsg.toLowerCase();
+  const userId = message.author.id;
 
-  if (isSpam(message.author.id, msgLower)) return;
-
-  // Comando de Entrar: Libera a trava de segurança e força a conexão
+  // Comandos absolutos (não sofrem trava)
   if (msgLower === "!entrar") {
     userDisconnected = false; 
     await joinVoice(message.guild);
-    return message.reply("🎧 entrei...");
+    return message.reply("Entrei. Espero que tenha um bom motivo para me chamar.");
   }
 
-  // Comando de Sair: Ativa a trava de segurança e mata a conexão imediatamente
   if (msgLower === "!sair") {
     userDisconnected = true; 
     if (currentConnection) {
       currentConnection.destroy();
       currentConnection = null;
-      console.log("🛑 O bot saiu da call e a trava automática foi ativada.");
     }
-    return message.reply("saí...");
+    return message.reply("Finalmente paz e silêncio. Fui.");
   }
 
-  if (msgLower === "oi") return message.reply("oi...");
-  if (msgLower === "te amo") return message.reply("foda-se.");
+  // Easter Eggs arrogantes
+  if (msgLower === "oi") return message.reply("O que você quer?");
+  if (msgLower === "te amo") return message.reply("Problema seu. Vai se tratar.");
+
+  // 🔒 CADEADO: Se o bot já está processando algo desse usuário, ignora mensagens novas
+  if (processingLocks.has(userId)) return;
 
   let forceVoice = false;
   let textToAI = originalMsg;
@@ -243,39 +221,44 @@ client.on("messageCreate", async (message) => {
     forceVoice = true;
     textToAI = originalMsg.slice(6); 
   } else {
-    if (chance(0.70)) return; // Regra de tédio do bot
+    // Modo preguiça (70% de ignorar)
+    if (chance(0.70)) return; 
   }
 
-  const aiResponse = await askAI(message, textToAI);
-  if (!aiResponse) return;
+  // Tranca o processamento para este usuário
+  processingLocks.add(userId);
 
-  // Agora ele checa a conexão global real do sistema
-  if (currentConnection && (forceVoice || chance(0.60))) {
-    speakInVoice(aiResponse);
-    try { await message.react("🎧"); } catch(e){}
-    return;
+  try {
+    const aiResponse = await askAI(message, textToAI);
+    if (!aiResponse) return;
+
+    if (currentConnection && (forceVoice || chance(0.60))) {
+      speakInVoice(aiResponse);
+      try { await message.react("🎧"); } catch(e){}
+    } else {
+      await message.reply(aiResponse);
+    }
+  } finally {
+    // 🔓 DESTranca o processamento não importa o que aconteça
+    processingLocks.delete(userId);
   }
-
-  return message.reply(aiResponse ?? fallback());
 });
 
-// =====================
-// 🚀 INICIALIZAÇÃO
-// =====================
+// ========================================================
+// 🚀 INICIALIZAÇÃO & PROTEÇÃO DE QUEDA
+// ========================================================
 client.once("ready", () => {
-  console.log(`🤖 Logado como ${client.user.tag}`);
+  console.log(`🤖 Arrogância ativada como ${client.user.tag}`);
   setTimeout(() => { joinVoice(); }, 3000);
 });
 
-// ========================================================
-// 🔁 RECONEXÃO INTELIGENTE (Não briga com o comando !sair)
-// ========================================================
 setInterval(() => {
-  // Só reconecta sozinho se ele cair por instabilidade, NUNCA se você usou !sair
   if (!currentConnection && VOICE_CHANNEL_ID && !userDisconnected) {
-    console.log("🔄 Queda detectada. Aplicando reconexão automática de segurança...");
     joinVoice();
   }
 }, 30000);
+
+// Previne que o bot crashe o Render caso dê algum erro bizarro do Discord
+process.on('unhandledRejection', error => console.error('Erros isolados contidos:', error));
 
 client.login(process.env.DISCORD_TOKEN);
