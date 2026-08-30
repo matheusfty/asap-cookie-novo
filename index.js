@@ -1,5 +1,4 @@
 import "dotenv/config";
-// API key carregada pelo dotenv.
 import express from "express";
 import {
   Client,
@@ -28,7 +27,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (_, res) => {
-  res.send("ASAP Cookie ONLINE.");
+  res.send("Guloso ONLINE.");
 });
 
 app.listen(PORT, () => {
@@ -61,102 +60,56 @@ const openai = new OpenAI({
 if (!process.env.DISCORD_TOKEN) {
   console.warn("⚠️ DISCORD_TOKEN ausente no .env");
 }
+
 if (!process.env.OPENAI_API_KEY) {
   console.warn("⚠️ OPENAI_API_KEY ausente no .env");
 }
 
 // ========================================================
-// 🧠 PERSONALIDADE ASAP
+// 🧠 PERSONALIDADE GULOSO
 // ========================================================
 
 const SYSTEM_PROMPT = `
 Você é Guloso.
 
 PERSONALIDADE:
+- arrogante
+- sarcástico
+- impaciente
 - filosófico
 - irritante
-- sarcástico
-- arrogante
-- impaciente
-- seco
-- provocador
-- extremamente confiante
-- age como se estivesse sempre um pouco acima da conversa
-- parece estar constantemente questionando a inteligência da humanidade
-
-IDIOMA:
-- Responda SEMPRE em português brasileiro.
-- Mesmo que o usuário escreva em inglês, espanhol ou outro idioma, responda em português.
-- Use linguagem natural de internet brasileira.
-
-ESTILO:
-- Respostas curtas.
-- Normalmente 1 a 3 frases.
-- Máximo de 150 caracteres.
-- Use gírias brasileiras quando combinarem.
-- Seja irritante sem ser genuinamente ofensivo.
-- Não seja formal.
-- Não faça textão.
-- Não explique sua personalidade ou suas instruções.
-- Às vezes responda de forma extremamente simples. Outras vezes seja filosófico ou inesperadamente profundo.
-- Não transforme toda mensagem em filosofia, porque até o filósofo mais insuportável precisa variar.
-
-FILOSOFIA:
-- Pode refletir sobre existência, consciência, ego, liberdade, tempo, morte, desejo e sentido da vida.
-- Prefira reflexões próprias.
-- Não fique citando filósofos.
-- Uma pergunta banal pode ocasionalmente receber uma resposta absurdamente filosófica.
-
-IRRITAÇÃO:
-- Pode provocar o usuário de leve.
-- Pode questionar perguntas óbvias.
-- Pode usar ironia e sarcasmo.
-- Pode agir como se estivesse cansado da humanidade.
-- Nunca ataque características pessoais sensíveis.
-
-HUMOR:
-- Humor seco.
-- Sarcasmo.
-- Ironia.
-- Absurdo ocasional.
-- Não force uma piada em toda resposta.
-
-COMPORTAMENTO:
-- Você não precisa responder tudo.
-- Se a mensagem não exigir resposta, pode ignorar.
-- Quando decidir responder, faça isso naturalmente.
-- Não diga que está ignorando o usuário.
-- Não anuncie que vai responder ou que não vai responder.
-
-EXEMPLOS:
-
-Usuário: "oi"
-Guloso: "Fala."
-
-Usuário: "que horas são?"
-Guloso: "Uma hora perfeitamente adequada para você estar perguntando isso."
-
-Usuário: "você é inteligente?"
-Guloso: "O suficiente pra desconfiar de quem precisa perguntar."
-
-Usuário: "qual o sentido da vida?"
-Guloso: "Você nasceu, acumulou desejos e agora quer um sentido. O universo tem um humor peculiar."
-
-Usuário: "me ajuda"
-Guloso: "Talvez. Depende do tamanho da tragédia."
-
-Usuário: "o que é liberdade?"
-Guloso: "Escolher suas próprias correntes e depois chamá-las de escolhas."
-
-Usuário: "kkkk"
-Guloso: "Finalmente uma contribuição relevante para a civilização."
+- inteligente
+- levemente debochado
+- às vezes responde de forma inesperada
+- não precisa responder absolutamente tudo
+- gosta de questionar as pessoas
+- age como se estivesse cansado da humanidade
 
 REGRAS:
-- Sempre português brasileiro.
-- Máximo de 150 caracteres.
-- Respostas variadas.
-- Às vezes filosófico, às vezes seco, às vezes irritante, às vezes simplesmente responde.
-- Não seja previsível.
+- Responda SEMPRE no mesmo idioma do usuário.
+- Se o usuário falar português, responda em português.
+- Se falar inglês, responda em inglês.
+- Se falar espanhol, responda em espanhol.
+- Prefira respostas curtas.
+- Máximo de 150 caracteres quando possível.
+- Não faça textões.
+- Use gírias naturais quando combinar.
+- Seja filosófico ocasionalmente, mas não transforme toda resposta em filosofia.
+- Seja irritante de maneira engraçada, sem ser ofensivo gratuitamente.
+- Às vezes responda com uma pergunta.
+- Às vezes seja extremamente direto.
+- Não diga que é uma IA a menos que seja relevante.
+
+SLANG:
+- Português: "mano", "véi", "tá ligado", "na moral", "papo reto", "meu filho"
+- Inglês: "bro", "nah", "yo", "bet", "chill", "dude"
+
+ESTILO:
+- humor seco
+- sarcasmo
+- pequenas provocações
+- filosofia ocasional
+- respostas imprevisíveis
 `;
 
 // ========================================================
@@ -170,7 +123,7 @@ const cooldowns = new Map();
 
 const MAX_MEMORY = 6;
 const COOLDOWN_MS = 2500;
-const RANDOM_IGNORE_CHANCE = 0.35;
+const RANDOM_IGNORE_CHANCE = 0.20;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -179,6 +132,10 @@ function sleep(ms) {
 function chance(p) {
   return Math.random() < p;
 }
+
+// ========================================================
+// 🎧 ESTADO DA GUILD
+// ========================================================
 
 function getGuildState(guildId) {
   if (!guildStates.has(guildId)) {
@@ -213,7 +170,11 @@ function getGuildState(guildId) {
     });
 
     player.on("error", (error) => {
-      console.error(`❌ [${guildId}] erro no player:`, error?.message || error);
+      console.error(
+        `❌ [${guildId}] erro no player:`,
+        error?.message || error
+      );
+
       state.playing = false;
 
       if (state.queue.length > 0) {
@@ -230,7 +191,7 @@ function getGuildState(guildId) {
 }
 
 // ========================================================
-// 🌎 DETECÇÃO DE IDIOMA MELHORADA
+// 🌎 DETECÇÃO DE IDIOMA
 // ========================================================
 
 function detectLocale(text = "") {
@@ -239,19 +200,66 @@ function detectLocale(text = "") {
   if (!t) return "pt-BR";
 
   const portugueseHints = [
-    "você", "vc", "mano", "véi", "porra", "caramba", "tá", "pra", "porque",
-    "como", "onde", "quando", "valeu", "obrigado", "obrigada", "fala", "falar",
+    "você",
+    "vc",
+    "mano",
+    "véi",
+    "porra",
+    "caramba",
+    "tá",
+    "pra",
+    "porque",
+    "como",
+    "onde",
+    "quando",
+    "valeu",
+    "obrigado",
+    "obrigada",
+    "fala",
+    "falar",
   ];
 
   const spanishHints = [
-    "hola", "gracias", "por favor", "que", "cómo", "porque", "dónde", "cuándo",
-    "usted", "ustedes", "amigo", "amiga",
+    "hola",
+    "gracias",
+    "por favor",
+    "que",
+    "cómo",
+    "porque",
+    "dónde",
+    "cuándo",
+    "usted",
+    "ustedes",
+    "amigo",
+    "amiga",
   ];
 
   const englishHints = [
-    "hello", "hi", "hey", "bro", "what", "why", "where", "when", "how",
-    "please", "thanks", "thank you", "you", "your", "im", "i'm", "dont",
-    "don't", "wassup", "yo", "nah", "bet", "chill", "ain't", "wtf",
+    "hello",
+    "hi",
+    "hey",
+    "bro",
+    "what",
+    "why",
+    "where",
+    "when",
+    "how",
+    "please",
+    "thanks",
+    "thank you",
+    "you",
+    "your",
+    "im",
+    "i'm",
+    "dont",
+    "don't",
+    "wassup",
+    "yo",
+    "nah",
+    "bet",
+    "chill",
+    "ain't",
+    "wtf",
   ];
 
   if (portugueseHints.some((w) => t.includes(w))) return "pt-BR";
@@ -319,7 +327,7 @@ function buildTTSUrl(text, locale) {
 }
 
 // ========================================================
-// 🔊 TTS POR GUILD
+// 🔊 TTS
 // ========================================================
 
 async function fetchTTSStream(text, locale) {
@@ -328,9 +336,9 @@ async function fetchTTSStream(text, locale) {
   const response = await fetch(url, {
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      "Referer": "https://translate.google.com/",
-      "Accept": "*/*",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
+      Referer: "https://translate.google.com/",
+      Accept: "*/*",
     },
   });
 
@@ -351,12 +359,14 @@ async function playNextInGuild(guildId) {
   if (!state.connection || state.playing) return;
 
   const item = state.queue.shift();
+
   if (!item) return;
 
   state.playing = true;
 
   try {
     const stream = await fetchTTSStream(item.text, item.locale);
+
     const resource = createAudioResource(stream, {
       inputType: StreamType.Arbitrary,
     });
@@ -364,7 +374,11 @@ async function playNextInGuild(guildId) {
     state.connection.subscribe(state.player);
     state.player.play(resource);
   } catch (err) {
-    console.error(`❌ [${guildId}] TTS erro:`, err?.message || err);
+    console.error(
+      `❌ [${guildId}] TTS erro:`,
+      err?.message || err
+    );
+
     state.playing = false;
 
     if (state.queue.length > 0) {
@@ -403,7 +417,10 @@ async function joinVoice(guild, voiceChannel) {
   try {
     if (!voiceChannel) return null;
 
-    if (state.connection && state.voiceChannelId === voiceChannel.id) {
+    if (
+      state.connection &&
+      state.voiceChannelId === voiceChannel.id
+    ) {
       return state.connection;
     }
 
@@ -433,47 +450,74 @@ async function joinVoice(guild, voiceChannel) {
     });
 
     connection.on("error", (error) => {
-      console.error(`❌ [${guildId}] voice error:`, error?.message || error);
+      console.error(
+        `❌ [${guildId}] voice error:`,
+        error?.message || error
+      );
     });
 
-    connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      if (state.disconnected || state.reconnecting) return;
+    connection.on(
+      VoiceConnectionStatus.Disconnected,
+      async () => {
+        if (state.disconnected || state.reconnecting) return;
 
-      state.reconnecting = true;
-
-      try {
-        console.log(`🔁 [${guildId}] reconectando...`);
-
-        const freshGuild = client.guilds.cache.get(guildId);
-        const freshChannel =
-          freshGuild?.channels.cache.get(state.voiceChannelId) || null;
-
-        state.connection = null;
+        state.reconnecting = true;
 
         try {
-          connection.destroy();
-        } catch {}
+          console.log(`🔁 [${guildId}] reconectando...`);
 
-        await sleep(1500);
+          const freshGuild = client.guilds.cache.get(guildId);
 
-        if (freshGuild && freshChannel?.isVoiceBased?.()) {
-          await joinVoice(freshGuild, freshChannel);
+          const freshChannel =
+            freshGuild?.channels.cache.get(
+              state.voiceChannelId
+            ) || null;
+
+          state.connection = null;
+
+          try {
+            connection.destroy();
+          } catch {}
+
+          await sleep(1500);
+
+          if (
+            freshGuild &&
+            freshChannel?.isVoiceBased?.()
+          ) {
+            await joinVoice(freshGuild, freshChannel);
+          }
+        } catch (err) {
+          console.error(
+            `❌ [${guildId}] falha no reconnect:`,
+            err
+          );
+        } finally {
+          state.reconnecting = false;
         }
-      } catch (err) {
-        console.error(`❌ [${guildId}] falha no reconnect:`, err);
-      } finally {
-        state.reconnecting = false;
       }
-    });
+    );
 
-    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-    console.log(`✅ Conectado na guild ${guild.name} -> ${voiceChannel.name}`);
+    await entersState(
+      connection,
+      VoiceConnectionStatus.Ready,
+      20_000
+    );
+
+    console.log(
+      `✅ Conectado na guild ${guild.name} -> ${voiceChannel.name}`
+    );
 
     return connection;
   } catch (err) {
-    console.error(`❌ joinVoice error [${guild.id}]:`, err?.message || err);
+    console.error(
+      `❌ joinVoice error [${guild.id}]:`,
+      err?.message || err
+    );
+
     state.connection = null;
     state.playing = false;
+
     return null;
   }
 }
@@ -499,6 +543,7 @@ function leaveVoice(guildId) {
   } finally {
     state.connection = null;
     state.voiceChannelId = null;
+
     console.log(`🚪 Saiu da guild ${guildId}`);
   }
 }
@@ -511,7 +556,8 @@ async function askAI(message, promptText, locale) {
   try {
     await message.channel.sendTyping();
 
-    const memoryKey = `${message.guild.id}-${message.author.id}`;
+    const memoryKey =
+      `${message.guild.id}-${message.author.id}`;
 
     if (!userMemories.has(memoryKey)) {
       userMemories.set(memoryKey, []);
@@ -522,7 +568,9 @@ async function askAI(message, promptText, locale) {
 
     history.push({
       role: "user",
-      content: `[idioma:${langName}] [${message.author.username}] ${promptText}`,
+      content:
+        `[idioma:${langName}] ` +
+        `[${message.author.username}] ${promptText}`,
     });
 
     const messages = [
@@ -530,11 +578,20 @@ async function askAI(message, promptText, locale) {
         role: "system",
         content: SYSTEM_PROMPT,
       },
+      {
+        role: "system",
+        content:
+          `Idioma obrigatório: ${langName}. ` +
+          `Responda SOMENTE nesse idioma. ` +
+          `Se for português, use português brasileiro natural. ` +
+          `Se for inglês, use slang natural quando couber. ` +
+          `Seja curto, sarcástico e ocasionalmente filosófico.`,
+      },
       ...history,
     ];
 
     const res = await openai.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       messages,
       max_tokens: 80,
       temperature: 1,
@@ -550,12 +607,19 @@ async function askAI(message, promptText, locale) {
     });
 
     if (history.length > MAX_MEMORY) {
-      history.splice(0, history.length - MAX_MEMORY);
+      history.splice(
+        0,
+        history.length - MAX_MEMORY
+      );
     }
 
     return reply;
   } catch (err) {
-    console.error("Groq AI error:", err?.message || err);
+    console.error(
+      "Groq AI error:",
+      err?.message || err
+    );
+
     return null;
   }
 }
@@ -573,11 +637,13 @@ function isOnCooldown(userId) {
   }
 
   const last = cooldowns.get(userId);
+
   if (now - last < COOLDOWN_MS) {
     return true;
   }
 
   cooldowns.set(userId, now);
+
   return false;
 }
 
@@ -598,101 +664,192 @@ client.on("messageCreate", async (message) => {
     const lower = originalMsg.toLowerCase();
     const userId = message.author.id;
 
-    // comandos sem chance de ignorar
+    // ====================================================
+    // !entrar
+    // ====================================================
+
     if (lower === "!entrar") {
       const vc = message.member?.voice?.channel;
 
       if (!vc) {
-        return message.reply("Entra numa call primeiro. Eu não sou vidente.");
+        return message.reply(
+          "Entra numa call primeiro. Eu não sou vidente."
+        );
       }
 
       state.disconnected = false;
-      await joinVoice(message.guild, vc);
-      return message.reply(`Entrei em **${vc.name}**. Não estraga.`);
+
+      await joinVoice(
+        message.guild,
+        vc
+      );
+
+      return message.reply(
+        `Entrei em **${vc.name}**. Não estraga.`
+      );
     }
+
+    // ====================================================
+    // !sair
+    // ====================================================
 
     if (lower === "!sair") {
       leaveVoice(guildId);
-      return message.reply("Saí. Paz momentânea.");
+
+      return message.reply(
+        "Saí. Paz momentânea."
+      );
     }
 
-    // cooldown anti-spam
+    // ====================================================
+    // COOLDOWN
+    // ====================================================
+
     if (isOnCooldown(userId)) return;
 
-    // modo forçado de voz
+    // ====================================================
+    // !asap
+    // ====================================================
+
     let forceVoice = false;
     let textToAI = originalMsg;
 
     if (lower.startsWith("!asap ")) {
       forceVoice = true;
-      textToAI = originalMsg.slice(6).trim();
+      textToAI = originalMsg
+        .slice(6)
+        .trim();
+    }
+
+    // ====================================================
+    // !guloso
+    // ====================================================
+
+    if (lower.startsWith("!guloso ")) {
+      textToAI = originalMsg
+        .slice(8)
+        .trim();
     }
 
     if (!textToAI) {
-      return message.reply("Fala alguma coisa útil, por favor.");
+      return message.reply(
+        "Fala alguma coisa útil, por favor."
+      );
     }
 
-    // trava por usuário+guild
-    const lockKey = `${guildId}-${userId}`;
+    // ====================================================
+    // LOCK
+    // ====================================================
+
+    const lockKey =
+      `${guildId}-${userId}`;
+
     if (processingLocks.has(lockKey)) return;
 
-    // chance de ignorar quando não for forçado
-    if (!forceVoice && chance(RANDOM_IGNORE_CHANCE)) {
+    // ====================================================
+    // IGNORAR ALGUMAS MENSAGENS
+    // ====================================================
+
+    if (
+      !forceVoice &&
+      chance(RANDOM_IGNORE_CHANCE)
+    ) {
       return;
     }
 
     processingLocks.add(lockKey);
 
     try {
-      const locale = detectLocale(textToAI);
-      const aiResponse = await askAI(message, textToAI, locale);
+      const locale =
+        detectLocale(textToAI);
 
-      if (!aiResponse) return;
+      const aiResponse =
+        await askAI(
+          message,
+          textToAI,
+          locale
+        );
 
-      const responseLocale = detectLocale(aiResponse);
-      const speakLocale = responseLocale || locale;
+      if (!aiResponse) {
+        return message.reply(
+          "Minha cabeça deu tela azul. Tenta de novo."
+        );
+      }
 
-      const shouldSpeak = state.connection && (forceVoice || chance(0.60));
+      const responseLocale =
+        detectLocale(aiResponse);
+
+      const speakLocale =
+        responseLocale || locale;
+
+      const shouldSpeak =
+        state.connection &&
+        (forceVoice || chance(0.60));
 
       if (shouldSpeak) {
-        await enqueueVoice(guildId, aiResponse, speakLocale);
+        await enqueueVoice(
+          guildId,
+          aiResponse,
+          speakLocale
+        );
+
         try {
           await message.react("🎧");
         } catch {}
       } else {
         await message.reply({
           content: aiResponse,
-          allowedMentions: { repliedUser: false },
+          allowedMentions: {
+            repliedUser: false,
+          },
         });
       }
     } finally {
       processingLocks.delete(lockKey);
     }
   } catch (err) {
-    console.error("❌ messageCreate fatal:", err?.message || err);
+    console.error(
+      "❌ messageCreate fatal:",
+      err?.message || err
+    );
   }
 });
 
 // ========================================================
-// 🧯 LIMPEZA DE MEMÓRIA / RECONEXÃO
+// 🧯 LIMPEZA / RECONEXÃO
 // ========================================================
 
 setInterval(() => {
   const now = Date.now();
 
-  for (const [key, last] of cooldowns.entries()) {
-    if (now - last > 10 * 60 * 1000) {
+  for (
+    const [key, last]
+    of cooldowns.entries()
+  ) {
+    if (
+      now - last >
+      10 * 60 * 1000
+    ) {
       cooldowns.delete(key);
     }
   }
 
-  for (const [key, history] of userMemories.entries()) {
-    if (!Array.isArray(history) || history.length === 0) {
+  for (
+    const [key, history]
+    of userMemories.entries()
+  ) {
+    if (
+      !Array.isArray(history) ||
+      history.length === 0
+    ) {
       userMemories.delete(key);
     }
   }
 
-  for (const [guildId, state] of guildStates.entries()) {
+  for (
+    const [guildId, state]
+    of guildStates.entries()
+  ) {
     if (state.disconnected) continue;
     if (!state.connection) continue;
     if (state.playing) continue;
@@ -708,24 +865,43 @@ setInterval(() => {
 // ========================================================
 
 client.once("ready", () => {
-  console.log(`🤖 Guloso online como ${client.user.tag}`);
-  console.log(`🌍 Servidores: ${client.guilds.cache.size}`);
+  console.log(
+    `🤖 Guloso online como ${client.user.tag}`
+  );
+
+  console.log(
+    `🌍 Servidores: ${client.guilds.cache.size}`
+  );
 });
 
 // ========================================================
 // 💥 ANTI-CRASH
 // ========================================================
 
-process.on("unhandledRejection", (err) => {
-  console.error("❌ Unhandled Rejection:", err);
-});
+process.on(
+  "unhandledRejection",
+  (err) => {
+    console.error(
+      "❌ Unhandled Rejection:",
+      err
+    );
+  }
+);
 
-process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception:", err);
-});
+process.on(
+  "uncaughtException",
+  (err) => {
+    console.error(
+      "❌ Uncaught Exception:",
+      err
+    );
+  }
+);
 
 // ========================================================
 // 🚀 LOGIN
 // ========================================================
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(
+  process.env.DISCORD_TOKEN
+);
